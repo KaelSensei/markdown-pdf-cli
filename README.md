@@ -137,6 +137,13 @@ or a newer stable Go release.
 
 Architecture notes are available in [docs/architecture.md](docs/architecture.md).
 
+Release binaries are built by GitHub Actions when a version tag is pushed:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
 Run tests:
 
 ```bash
