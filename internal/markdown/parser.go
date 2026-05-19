@@ -7,22 +7,35 @@ import (
 	"unicode"
 )
 
+// BlockType identifies the semantic kind of a parsed Markdown block.
 type BlockType int
 
 const (
+	// Paragraph is a run of inline text with no stronger block semantics.
 	Paragraph BlockType = iota
+	// Heading is an ATX heading, from level 1 through 6.
 	Heading
+	// List is an ordered or unordered list.
 	List
+	// CodeBlock is a fenced code block.
 	CodeBlock
+	// Blockquote is one or more quoted lines.
 	Blockquote
+	// ThematicBreak is a horizontal rule.
 	ThematicBreak
+	// Table is a simple pipe-delimited table.
 	Table
 )
 
+// Document is the parser output consumed by the renderer.
 type Document struct {
 	Blocks []Block
 }
 
+// Block holds the fields needed by each supported block type.
+//
+// The parser keeps this structure flat to avoid over-modeling a deliberately
+// small Markdown subset. Callers should read the fields that match Type.
 type Block struct {
 	Type   BlockType
 	Level  int
@@ -33,6 +46,7 @@ type Block struct {
 	Rows   [][]string
 }
 
+// ListItem is one rendered item in an ordered or unordered list.
 type ListItem struct {
 	Text    string
 	Level   int
@@ -48,6 +62,10 @@ var (
 	autolinkRE = regexp.MustCompile(`<((?:https?|mailto):[^>]+)>`)
 )
 
+// Parse converts Markdown source text into a sequence of renderable blocks.
+//
+// It normalizes line endings, skips YAML-style front matter, and recognizes the
+// Markdown features supported by V1 of the CLI.
 func Parse(input string) Document {
 	input = strings.ReplaceAll(input, "\r\n", "\n")
 	input = strings.ReplaceAll(input, "\r", "\n")
@@ -61,6 +79,7 @@ func Parse(input string) Document {
 			i++
 			continue
 		}
+		// Treat a top-of-file --- block as front matter, not as a visible rule.
 		if i == 0 && strings.TrimSpace(line) == "---" {
 			if next := findFrontMatterEnd(lines); next > 0 {
 				i = next + 1
@@ -110,6 +129,11 @@ func Parse(input string) Document {
 	return Document{Blocks: blocks}
 }
 
+// PlainInline reduces inline Markdown to text that can be drawn in the PDF.
+//
+// V1 does not preserve inline styling spans. Links are expanded to
+// "label (url)" and images are represented as "[image: alt text]" so the output
+// remains readable and fully offline.
 func PlainInline(text string) string {
 	text = imageRE.ReplaceAllString(text, "[image: $1]")
 	text = linkRE.ReplaceAllString(text, "$1 ($2)")
@@ -394,6 +418,7 @@ func splitPipeRow(line string) []string {
 	var current strings.Builder
 	escaped := false
 	for _, r := range line {
+		// Markdown tables allow escaped pipes inside cell text.
 		if escaped {
 			current.WriteRune(r)
 			escaped = false

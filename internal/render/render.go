@@ -10,11 +10,17 @@ import (
 	"github.com/KaelSensei/markdown-pdf-cli/internal/pdf"
 )
 
+// Options configures one Markdown-to-PDF conversion.
 type Options struct {
-	Title       string
-	PageSize    string
-	Margin      float64
-	Theme       string
+	// Title is written into PDF metadata. A default title is used when empty.
+	Title string
+	// PageSize accepts "a4" or "letter".
+	PageSize string
+	// Margin is measured in PDF points. When zero, a readable default is used.
+	Margin float64
+	// Theme accepts "modern", "classic", or "elegant".
+	Theme string
+	// ColorScheme accepts "light" or "dark".
 	ColorScheme string
 }
 
@@ -57,6 +63,10 @@ type renderer struct {
 	theme        theme
 }
 
+// MarkdownToPDF converts Markdown source text into a complete PDF file.
+//
+// The function is pure from the caller's perspective: it does not read files,
+// write files, or call the network. All IO is handled by the CLI layer.
 func MarkdownToPDF(source string, opts Options) ([]byte, error) {
 	size, err := resolvePageSize(opts.PageSize)
 	if err != nil {
@@ -492,6 +502,8 @@ func (r *renderer) renderTable(block markdown.Block) {
 			}
 		}
 
+		// Tables are paginated at row boundaries. Individual rows can grow taller
+		// when cell text wraps, but a row is never split across two pages.
 		rowHeight := float64(maxLines)*lineHeight + 8
 		r.ensure(rowHeight)
 		y := r.cursor
@@ -520,6 +532,8 @@ func (r *renderer) drawWrappedLines(lines []string, x, size, lineHeight float64,
 }
 
 func (r *renderer) drawTextLine(x, y, size, lineHeight float64, font, text string, color pdf.RGB) {
+	// Page layout tracks the top of a line box. PDF text drawing expects a
+	// baseline, so the text is nudged down into the box before drawing.
 	baseline := y + size + (lineHeight-size)*0.45
 	r.page.TextColor(x, baseline, size, font, text, color)
 }
@@ -622,6 +636,8 @@ func textWidth(text string, font string, size float64) float64 {
 }
 
 func glyphWidth(r rune, font string) float64 {
+	// This approximation keeps wrapping deterministic without a font metrics
+	// dependency. It is tuned for built-in Helvetica, Times, and Courier output.
 	if strings.HasPrefix(font, "F3") || strings.HasPrefix(font, "F4") {
 		return 0.60
 	}
