@@ -14,8 +14,16 @@ func TestNormalizeArgsAllowsFlagsAfterInput(t *testing.T) {
 }
 
 func TestDefaultOutputPath(t *testing.T) {
-	got := defaultOutputPath("docs/readme.md")
+	got := defaultOutputPath("docs/readme.md", ".pdf")
 	want := "docs/readme.pdf"
+	if got != want {
+		t.Fatalf("defaultOutputPath() = %q, want %q", got, want)
+	}
+}
+
+func TestDefaultOutputPathForReverse(t *testing.T) {
+	got := defaultOutputPath("docs/readme.pdf", ".md")
+	want := "docs/readme.md"
 	if got != want {
 		t.Fatalf("defaultOutputPath() = %q, want %q", got, want)
 	}
