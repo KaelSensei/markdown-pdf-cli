@@ -1,5 +1,7 @@
 # Markdown PDF CLI
 
+[![CI](https://github.com/KaelSensei/markdown-pdf-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/KaelSensei/markdown-pdf-cli/actions/workflows/ci.yml)
+
 `mdpdf` is a small offline Markdown-to-PDF converter for the terminal.
 
 The V1 goal is intentionally narrow: generate readable PDF documents from common Markdown without a browser, a web service, LaTeX, Pandoc, or any LLM call. The converter is written in Go and currently uses only the Go standard library.
@@ -16,6 +18,10 @@ The V1 goal is intentionally narrow: generate readable PDF documents from common
 - Preserves common Latin characters through PDF WinAnsi encoding.
 
 ## Install
+
+Requirements:
+
+- Go 1.24 or newer
 
 From the repository root:
 
@@ -125,6 +131,9 @@ The converter does not call the network and does not use external services. It w
 That means the output is deliberately simple and portable. It also means there is no dependency on Chromium, wkhtmltopdf, LaTeX, Typst, Pandoc, or a remote API.
 
 ## Development
+
+This project is built and tested with Go 1.24. Use the same major/minor version
+or a newer stable Go release.
 
 Run tests:
 
