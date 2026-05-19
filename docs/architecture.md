@@ -4,6 +4,7 @@
 
 ```text
 Markdown file -> CLI -> Markdown parser -> Renderer -> PDF writer -> PDF file
+PDF file -> CLI -> PDF extractor -> Reverse renderer -> Markdown file
 ```
 
 The main design constraint is offline conversion. The program does not call a
@@ -21,6 +22,7 @@ The CLI package owns user-facing behavior:
 - Choose default output paths and PDF titles.
 - Call the renderer.
 - Write the generated PDF bytes.
+- Dispatch reverse conversion through `mdpdf reverse`.
 
 The CLI intentionally stays thin so the conversion core can later be reused by a
 web UI, desktop wrapper, or batch processor.
@@ -55,6 +57,24 @@ The PDF package writes the final PDF file directly with standard-library Go.
 It creates PDF objects, page streams, built-in font resources, metadata, an xref
 table, and trailer data. It uses built-in Type 1 fonts and WinAnsi encoding, so
 generated files do not need bundled fonts.
+
+### `internal/reverse`
+
+The reverse package extracts positioned PDF text and converts it into
+best-effort Markdown.
+
+It groups extracted text into visual lines, merges adjacent glyph chunks,
+detects common document patterns, and emits readable Markdown. Detection is
+heuristic because PDF files do not reliably preserve source-level structure.
+
+The package currently infers:
+
+- Headings from larger bold text.
+- Paragraphs from line spacing.
+- Lists from bullet or numbered prefixes.
+- Code blocks from monospace fonts.
+- Blockquotes from italic text.
+- Simple tables from repeated aligned text chunks.
 
 ## Styling Model
 
@@ -91,8 +111,7 @@ PDF-to-Markdown is possible, but it is not a true inverse of Markdown-to-PDF.
 A PDF usually stores positioned text and drawing commands, not the original
 semantic document structure.
 
-A future PDF-to-Markdown mode should therefore be treated as best-effort
-extraction:
+The V2 reverse mode is therefore treated as best-effort extraction:
 
 - Extract text from pages.
 - Infer headings from font size and position when available.
@@ -100,8 +119,8 @@ extraction:
 - Infer lists from bullets, numbering, and indentation.
 - Infer tables only when text alignment is clear enough.
 
-This should be a separate package and command mode so it does not complicate the
-current Markdown-to-PDF renderer.
+The reverse pipeline stays in a separate package and command mode so it does not
+complicate the Markdown-to-PDF renderer.
 
 ## Future Extension Points
 

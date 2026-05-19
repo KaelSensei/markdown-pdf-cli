@@ -8,11 +8,20 @@ import (
 	"strings"
 
 	"github.com/KaelSensei/markdown-pdf-cli/internal/render"
+	"github.com/KaelSensei/markdown-pdf-cli/internal/reverse"
 )
 
-const version = "0.1.0"
+const version = "0.2.0"
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "reverse" {
+		runReverse(os.Args[2:])
+		return
+	}
+	runMarkdownToPDF(os.Args[1:])
+}
+
+func runMarkdownToPDF(args []string) {
 	var (
 		outputPath string
 		title      string
@@ -34,11 +43,12 @@ func main() {
 	flags.BoolVar(&quiet, "quiet", false, "Do not print the output path.")
 	flags.BoolVar(&showVer, "version", false, "Print version and exit.")
 	flags.Usage = func() {
-		fmt.Fprintf(flags.Output(), "Usage: %s [options] input.md\n\nOptions:\n", filepath.Base(os.Args[0]))
+		fmt.Fprintf(flags.Output(), "Usage: %s [options] input.md\n", filepath.Base(os.Args[0]))
+		fmt.Fprintf(flags.Output(), "       %s reverse [options] input.pdf\n\nOptions:\n", filepath.Base(os.Args[0]))
 		flags.PrintDefaults()
 	}
 
-	if err := flags.Parse(normalizeArgs(os.Args[1:])); err != nil {
+	if err := flags.Parse(normalizeArgs(args)); err != nil {
 		exitError(err)
 	}
 	if showVer {
@@ -52,7 +62,7 @@ func main() {
 
 	inputPath := flags.Arg(0)
 	if outputPath == "" {
-		outputPath = defaultOutputPath(inputPath)
+		outputPath = defaultOutputPath(inputPath, ".pdf")
 	}
 	if title == "" {
 		title = defaultTitle(inputPath)
@@ -85,12 +95,62 @@ func main() {
 	}
 }
 
-func defaultOutputPath(inputPath string) string {
-	ext := filepath.Ext(inputPath)
-	if ext == "" {
-		return inputPath + ".pdf"
+func runReverse(args []string) {
+	var (
+		outputPath    string
+		quiet         bool
+		preservePages bool
+	)
+
+	flags := flag.NewFlagSet("mdpdf reverse", flag.ExitOnError)
+	flags.StringVar(&outputPath, "o", "", "Output Markdown path. Defaults to input path with .md extension.")
+	flags.BoolVar(&preservePages, "preserve-pages", false, "Insert page boundary comments into the Markdown output.")
+	flags.BoolVar(&quiet, "quiet", false, "Do not print the output path.")
+	flags.Usage = func() {
+		fmt.Fprintf(flags.Output(), "Usage: %s reverse [options] input.pdf\n\nOptions:\n", filepath.Base(os.Args[0]))
+		flags.PrintDefaults()
 	}
-	return strings.TrimSuffix(inputPath, ext) + ".pdf"
+
+	if err := flags.Parse(normalizeArgs(args)); err != nil {
+		exitError(err)
+	}
+	if flags.NArg() != 1 {
+		flags.Usage()
+		os.Exit(2)
+	}
+
+	inputPath := flags.Arg(0)
+	if outputPath == "" {
+		outputPath = defaultOutputPath(inputPath, ".md")
+	}
+
+	markdown, err := reverse.PDFFileToMarkdown(inputPath, reverse.Options{
+		PreservePages: preservePages,
+	})
+	if err != nil {
+		exitError(err)
+	}
+
+	if err := os.MkdirAll(filepath.Dir(outputPath), 0o755); err != nil && filepath.Dir(outputPath) != "." {
+		exitError(fmt.Errorf("create output directory: %w", err))
+	}
+	if err := os.WriteFile(outputPath, []byte(markdown), 0o644); err != nil {
+		exitError(fmt.Errorf("write output: %w", err))
+	}
+	if !quiet {
+		fmt.Printf("Wrote %s\n", outputPath)
+	}
+}
+
+func defaultOutputPath(inputPath, targetExt string) string {
+	if targetExt == "" || !strings.HasPrefix(targetExt, ".") {
+		targetExt = "." + targetExt
+	}
+	sourceExt := filepath.Ext(inputPath)
+	if sourceExt == "" {
+		return inputPath + targetExt
+	}
+	return strings.TrimSuffix(inputPath, sourceExt) + targetExt
 }
 
 // normalizeArgs lets users place flags before or after the input path.
