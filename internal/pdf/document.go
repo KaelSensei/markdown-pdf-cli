@@ -7,46 +7,59 @@ import (
 	"strings"
 )
 
+// Size stores page dimensions in PDF points.
 type Size struct {
 	Width  float64
 	Height float64
 }
 
+// RGB stores color channels as PDF-compatible values from 0 to 1.
 type RGB struct {
 	R float64
 	G float64
 	B float64
 }
 
+// Document accumulates pages and serializes them into a PDF byte stream.
 type Document struct {
 	size  Size
 	title string
 	pages []*Page
 }
 
+// Page records PDF drawing commands for a single page content stream.
 type Page struct {
 	size    Size
 	content bytes.Buffer
 }
 
+// New creates a PDF document with a fixed page size and title metadata.
 func New(size Size, title string) *Document {
 	return &Document{size: size, title: title}
 }
 
+// Size returns the configured document page size.
 func (d *Document) Size() Size {
 	return d.size
 }
 
+// AddPage appends a blank page and returns it for drawing.
 func (d *Document) AddPage() *Page {
 	page := &Page{size: d.size}
 	d.pages = append(d.pages, page)
 	return page
 }
 
+// Text draws black text at the given page coordinates.
 func (p *Page) Text(x, y, size float64, fontName string, text string) {
 	p.TextColor(x, y, size, fontName, text, RGB{R: 0, G: 0, B: 0})
 }
 
+// TextColor draws colored text at the given page coordinates.
+//
+// Public drawing methods use top-left coordinates because that matches the
+// renderer's layout model. The PDF stream stores bottom-left coordinates, so the
+// Y value is flipped before writing the command.
 func (p *Page) TextColor(x, y, size float64, fontName string, text string, color RGB) {
 	if text == "" {
 		return
@@ -63,6 +76,7 @@ func (p *Page) TextColor(x, y, size float64, fontName string, text string, color
 	)
 }
 
+// Line draws a stroked line between two page coordinates.
 func (p *Page) Line(x1, y1, x2, y2, width float64, color RGB) {
 	fmt.Fprintf(&p.content, "%.3f %.3f %.3f RG %.2f w %.2f %.2f m %.2f %.2f l S\n",
 		color.R, color.G, color.B,
@@ -72,6 +86,7 @@ func (p *Page) Line(x1, y1, x2, y2, width float64, color RGB) {
 	)
 }
 
+// FillRect draws a filled rectangle using top-left page coordinates.
 func (p *Page) FillRect(x, y, width, height float64, color RGB) {
 	fmt.Fprintf(&p.content, "%.3f %.3f %.3f rg %.2f %.2f %.2f %.2f re f\n",
 		color.R, color.G, color.B,
@@ -80,6 +95,7 @@ func (p *Page) FillRect(x, y, width, height float64, color RGB) {
 	)
 }
 
+// StrokeRect draws a rectangle outline using top-left page coordinates.
 func (p *Page) StrokeRect(x, y, width, height, strokeWidth float64, color RGB) {
 	fmt.Fprintf(&p.content, "%.3f %.3f %.3f RG %.2f w %.2f %.2f %.2f %.2f re S\n",
 		color.R, color.G, color.B,
@@ -89,11 +105,14 @@ func (p *Page) StrokeRect(x, y, width, height, strokeWidth float64, color RGB) {
 	)
 }
 
+// Bytes serializes the document into a complete PDF 1.4 file.
 func (d *Document) Bytes() []byte {
 	if len(d.pages) == 0 {
 		d.AddPage()
 	}
 
+	// Object 1 is the catalog and object 2 is the page tree. Their bodies depend
+	// on page IDs, so placeholders keep numbering stable while pages are built.
 	objects := []string{"", ""}
 	addObject := func(body string) int {
 		objects = append(objects, body)
@@ -159,6 +178,8 @@ func (d *Document) Bytes() []byte {
 	var out bytes.Buffer
 	out.WriteString("%PDF-1.4\n%\xE2\xE3\xCF\xD3\n")
 
+	// The xref table needs byte offsets for every object, so offsets are captured
+	// immediately before each object is written.
 	offsets := make([]int, len(objects)+1)
 	for i, object := range objects {
 		id := i + 1
@@ -229,6 +250,9 @@ func encodeWinAnsi(text string) []byte {
 	return out
 }
 
+// winAnsiSpecials maps printable Unicode punctuation to WinAnsi bytes supported
+// by built-in PDF fonts. Unknown runes fall back to '?' until embedded Unicode
+// fonts are added.
 var winAnsiSpecials = map[rune]byte{
 	'€': 0x80,
 	'‚': 0x82,

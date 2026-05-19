@@ -93,6 +93,10 @@ func defaultOutputPath(inputPath string) string {
 	return strings.TrimSuffix(inputPath, ext) + ".pdf"
 }
 
+// normalizeArgs lets users place flags before or after the input path.
+//
+// Go's standard flag package stops parsing at the first positional argument,
+// while many CLI users expect "mdpdf input.md -o out.pdf" to work.
 func normalizeArgs(args []string) []string {
 	var flagArgs []string
 	var positional []string
