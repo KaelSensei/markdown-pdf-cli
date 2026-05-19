@@ -135,6 +135,8 @@ That means the output is deliberately simple and portable. It also means there i
 This project is built and tested with Go 1.24. Use the same major/minor version
 or a newer stable Go release.
 
+Architecture notes are available in [docs/architecture.md](docs/architecture.md).
+
 Run tests:
 
 ```bash
