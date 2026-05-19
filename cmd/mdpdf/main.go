@@ -3,10 +3,14 @@ package main
 import (
 	"flag"
 	"fmt"
+	"image"
+	_ "image/jpeg"
+	_ "image/png"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/KaelSensei/markdown-pdf-cli/internal/docx"
 	"github.com/KaelSensei/markdown-pdf-cli/internal/render"
 	"github.com/KaelSensei/markdown-pdf-cli/internal/reverse"
 )
@@ -18,10 +22,10 @@ func main() {
 		runReverse(os.Args[2:])
 		return
 	}
-	runMarkdownToPDF(os.Args[1:])
+	runInputToPDF(os.Args[1:])
 }
 
-func runMarkdownToPDF(args []string) {
+func runInputToPDF(args []string) {
 	var (
 		outputPath string
 		title      string
@@ -43,7 +47,7 @@ func runMarkdownToPDF(args []string) {
 	flags.BoolVar(&quiet, "quiet", false, "Do not print the output path.")
 	flags.BoolVar(&showVer, "version", false, "Print version and exit.")
 	flags.Usage = func() {
-		fmt.Fprintf(flags.Output(), "Usage: %s [options] input.md\n", filepath.Base(os.Args[0]))
+		fmt.Fprintf(flags.Output(), "Usage: %s [options] input.md|input.txt|input.docx|input.png|input.jpg|input.jpeg\n", filepath.Base(os.Args[0]))
 		fmt.Fprintf(flags.Output(), "       %s reverse [options] input.pdf\n\nOptions:\n", filepath.Base(os.Args[0]))
 		flags.PrintDefaults()
 	}
@@ -68,12 +72,7 @@ func runMarkdownToPDF(args []string) {
 		title = defaultTitle(inputPath)
 	}
 
-	source, err := os.ReadFile(inputPath)
-	if err != nil {
-		exitError(fmt.Errorf("read input: %w", err))
-	}
-
-	pdf, err := render.MarkdownToPDF(string(source), render.Options{
+	pdf, err := inputToPDF(inputPath, render.Options{
 		Title:       title,
 		PageSize:    pageSize,
 		Margin:      margin,
@@ -93,6 +92,59 @@ func runMarkdownToPDF(args []string) {
 	if !quiet {
 		fmt.Printf("Wrote %s\n", outputPath)
 	}
+}
+
+func inputToPDF(inputPath string, opts render.Options) ([]byte, error) {
+	switch strings.ToLower(filepath.Ext(inputPath)) {
+	case ".md", ".markdown":
+		source, err := os.ReadFile(inputPath)
+		if err != nil {
+			return nil, fmt.Errorf("read input: %w", err)
+		}
+		return render.MarkdownToPDF(string(source), opts)
+	case ".txt", ".text":
+		source, err := os.ReadFile(inputPath)
+		if err != nil {
+			return nil, fmt.Errorf("read input: %w", err)
+		}
+		return render.PlainTextToPDF(string(source), opts)
+	case ".docx":
+		// DOCX files are ZIP packages. The docx package extracts document.xml
+		// into simple Markdown so the existing renderer stays the single text
+		// layout path.
+		markdown, err := docx.FileToMarkdown(inputPath)
+		if err != nil {
+			return nil, err
+		}
+		return render.MarkdownToPDF(markdown, opts)
+	case ".png", ".jpg", ".jpeg":
+		img, err := readImage(inputPath)
+		if err != nil {
+			return nil, err
+		}
+		return render.ImageToPDF(img, opts)
+	default:
+		return nil, fmt.Errorf("unsupported input format %q: use .md, .txt, .docx, .png, .jpg, or .jpeg", filepath.Ext(inputPath))
+	}
+}
+
+func readImage(inputPath string) (image.Image, error) {
+	file, err := os.Open(inputPath)
+	if err != nil {
+		return nil, fmt.Errorf("read input: %w", err)
+	}
+	defer file.Close()
+
+	// Blank image imports above register PNG and JPEG decoders with image.Decode
+	// while keeping the CLI independent of external image tools.
+	img, format, err := image.Decode(file)
+	if err != nil {
+		return nil, fmt.Errorf("decode image: %w", err)
+	}
+	if format != "png" && format != "jpeg" {
+		return nil, fmt.Errorf("unsupported image format %q", format)
+	}
+	return img, nil
 }
 
 func runReverse(args []string) {

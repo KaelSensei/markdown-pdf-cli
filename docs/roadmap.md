@@ -42,6 +42,12 @@ allows it.
 - Improve table layout for wide and wrapped content.
 - Add better handling for nested lists.
 
+## Additional Input Formats
+
+- Improve DOCX extraction for tables, headers, footers, and embedded images.
+- Add multi-image PDF generation for batches of PNG/JPEG files.
+- Add image orientation handling from EXIF metadata.
+
 ## Repository Quality
 
 - Add `CONTRIBUTING.md`.

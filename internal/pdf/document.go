@@ -2,7 +2,9 @@ package pdf
 
 import (
 	"bytes"
+	"compress/zlib"
 	"fmt"
+	"image"
 	"sort"
 	"strings"
 )
@@ -22,15 +24,24 @@ type RGB struct {
 
 // Document accumulates pages and serializes them into a PDF byte stream.
 type Document struct {
-	size  Size
-	title string
-	pages []*Page
+	size   Size
+	title  string
+	pages  []*Page
+	images []Image
 }
 
 // Page records PDF drawing commands for a single page content stream.
 type Page struct {
 	size    Size
 	content bytes.Buffer
+}
+
+// Image is a raster image resource that can be drawn on pages.
+type Image struct {
+	name   string
+	width  int
+	height int
+	data   []byte
 }
 
 // New creates a PDF document with a fixed page size and title metadata.
@@ -48,6 +59,24 @@ func (d *Document) AddPage() *Page {
 	page := &Page{size: d.size}
 	d.pages = append(d.pages, page)
 	return page
+}
+
+// AddImage converts a Go image to a PDF image resource and returns its handle.
+func (d *Document) AddImage(img image.Image) Image {
+	bounds := img.Bounds()
+	ref := Image{
+		name:   fmt.Sprintf("Im%d", len(d.images)+1),
+		width:  bounds.Dx(),
+		height: bounds.Dy(),
+		data:   encodeImageRGB(img),
+	}
+	d.images = append(d.images, ref)
+	return ref
+}
+
+// Size returns the original pixel dimensions of the image resource.
+func (img Image) Size() (int, int) {
+	return img.width, img.height
 }
 
 // Text draws black text at the given page coordinates.
@@ -105,6 +134,20 @@ func (p *Page) StrokeRect(x, y, width, height, strokeWidth float64, color RGB) {
 	)
 }
 
+// DrawImage draws an image resource into the given top-left rectangle.
+func (p *Page) DrawImage(img Image, x, y, width, height float64) {
+	if img.name == "" || width <= 0 || height <= 0 {
+		return
+	}
+	fmt.Fprintf(&p.content, "q %.2f 0 0 %.2f %.2f %.2f cm /%s Do Q\n",
+		width,
+		height,
+		x,
+		p.size.Height-y-height,
+		img.name,
+	)
+}
+
 // Bytes serializes the document into a complete PDF 1.4 file.
 func (d *Document) Bytes() []byte {
 	if len(d.pages) == 0 {
@@ -143,6 +186,17 @@ func (d *Document) Bytes() []byte {
 		))
 	}
 
+	imageIDs := make(map[string]int, len(d.images))
+	for _, img := range d.images {
+		imageIDs[img.name] = addObject(fmt.Sprintf(
+			"<< /Type /XObject /Subtype /Image /Width %d /Height %d /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode /Length %d >>\nstream\n%s\nendstream",
+			img.width,
+			img.height,
+			len(img.data),
+			string(img.data),
+		))
+	}
+
 	var pageIDs []int
 	for _, page := range d.pages {
 		content := page.content.String()
@@ -152,12 +206,26 @@ func (d *Document) Bytes() []byte {
 		for _, name := range fontNames {
 			fmt.Fprintf(&fontResource, "/%s %d 0 R ", name, fontIDs[name])
 		}
+		xObjectResource := strings.Builder{}
+		if len(imageIDs) > 0 {
+			xObjectResource.WriteString("/XObject << ")
+			imageNames := make([]string, 0, len(imageIDs))
+			for name := range imageIDs {
+				imageNames = append(imageNames, name)
+			}
+			sort.Strings(imageNames)
+			for _, name := range imageNames {
+				fmt.Fprintf(&xObjectResource, "/%s %d 0 R ", name, imageIDs[name])
+			}
+			xObjectResource.WriteString(">> ")
+		}
 
 		pageID := addObject(fmt.Sprintf(
-			"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 %.2f %.2f] /Resources << /Font << %s>> >> /Contents %d 0 R >>",
+			"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 %.2f %.2f] /Resources << /Font << %s>> %s>> /Contents %d 0 R >>",
 			d.size.Width,
 			d.size.Height,
 			fontResource.String(),
+			xObjectResource.String(),
 			contentID,
 		))
 		pageIDs = append(pageIDs, pageID)
@@ -200,6 +268,40 @@ func (d *Document) Bytes() []byte {
 	)
 
 	return out.Bytes()
+}
+
+func encodeImageRGB(img image.Image) []byte {
+	bounds := img.Bounds()
+	var raw bytes.Buffer
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			r, g, b, a := img.At(x, y).RGBA()
+			if a == 0 {
+				raw.Write([]byte{255, 255, 255})
+				continue
+			}
+			if a < 0xffff {
+				r = compositeOnWhite(r, a)
+				g = compositeOnWhite(g, a)
+				b = compositeOnWhite(b, a)
+			}
+			raw.WriteByte(byte(r >> 8))
+			raw.WriteByte(byte(g >> 8))
+			raw.WriteByte(byte(b >> 8))
+		}
+	}
+
+	var compressed bytes.Buffer
+	writer := zlib.NewWriter(&compressed)
+	_, _ = writer.Write(raw.Bytes())
+	_ = writer.Close()
+	return compressed.Bytes()
+}
+
+func compositeOnWhite(channel, alpha uint32) uint32 {
+	// color.Color returns premultiplied channels, so compositing onto white only
+	// needs to add the transparent portion of the white background.
+	return channel + 0xffff - alpha
 }
 
 func textLiteral(text string) string {

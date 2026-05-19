@@ -4,6 +4,9 @@
 
 ```text
 Markdown file -> CLI -> Markdown parser -> Renderer -> PDF writer -> PDF file
+Text file -> CLI -> Text renderer -> PDF writer -> PDF file
+DOCX file -> CLI -> DOCX extractor -> Markdown parser -> Renderer -> PDF file
+Image file -> CLI -> Image decoder -> Renderer -> PDF writer -> PDF file
 PDF file -> CLI -> PDF extractor -> Reverse renderer -> Markdown file
 ```
 
@@ -18,7 +21,8 @@ conversion time.
 The CLI package owns user-facing behavior:
 
 - Parse command-line flags.
-- Read the Markdown source file.
+- Detect supported input formats.
+- Read the source file.
 - Choose default output paths and PDF titles.
 - Call the renderer.
 - Write the generated PDF bytes.
@@ -36,6 +40,12 @@ blockquotes, thematic breaks, simple pipe tables, links, and image alt text. It
 does not attempt full CommonMark compatibility. This keeps behavior predictable
 and avoids pulling in a large parsing dependency before the project needs it.
 
+### `internal/docx`
+
+The DOCX package extracts text from `word/document.xml` inside a DOCX ZIP
+package and maps common paragraph styles into Markdown. It is deliberately a
+text extraction layer, not a Microsoft Word layout engine.
+
 ### `internal/render`
 
 The renderer turns parsed blocks into page layout decisions:
@@ -45,6 +55,8 @@ The renderer turns parsed blocks into page layout decisions:
 - Text wrapping.
 - Pagination.
 - Block-specific layout for headings, code blocks, quotes, tables, and lists.
+- Plain text paragraph layout.
+- Image scaling into a single PDF page.
 
 The renderer uses top-left coordinates because that model is easier to reason
 about for document layout. The PDF writer handles conversion to PDF's native
@@ -55,8 +67,8 @@ bottom-left coordinate system.
 The PDF package writes the final PDF file directly with standard-library Go.
 
 It creates PDF objects, page streams, built-in font resources, metadata, an xref
-table, and trailer data. It uses built-in Type 1 fonts and WinAnsi encoding, so
-generated files do not need bundled fonts.
+table, trailer data, and embedded image XObjects. It uses built-in Type 1 fonts
+and WinAnsi encoding, so generated text PDFs do not need bundled fonts.
 
 ### `internal/reverse`
 
@@ -104,6 +116,20 @@ images, or custom font loading.
 
 This tradeoff is intentional: the output is simpler, but the binary remains
 portable and the conversion stays fully local.
+
+## Other Input Formats
+
+Plain text uses the same page, theme, wrapping, and pagination rules as
+Markdown paragraphs.
+
+DOCX support is intentionally text-first. The converter reads XML from the DOCX
+package, extracts paragraph text, maps common heading styles, and then reuses the
+Markdown renderer. It does not preserve Word-specific layout, embedded images,
+comments, tracked changes, headers, footers, or page styling.
+
+PNG and JPEG support decodes images with Go's standard library and embeds the
+pixels into a PDF image XObject. Images are scaled proportionally to fit inside
+the selected page size and margin.
 
 ## PDF To Markdown
 
