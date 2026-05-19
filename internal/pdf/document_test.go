@@ -22,6 +22,23 @@ func TestDocumentBytesCreatesPDF(t *testing.T) {
 	}
 }
 
+func TestTextLiteralEscapesPDFSyntax(t *testing.T) {
+	got := textLiteral(`hello) Tj ET /Evil << /JS (app.alert\(1\)) >> BT (` + "\nnext")
+
+	if bytes.Contains([]byte(got), []byte("hello) Tj")) {
+		t.Fatalf("text literal did not escape closing parenthesis: %q", got)
+	}
+	if !bytes.Contains([]byte(got), []byte(`hello\) Tj`)) {
+		t.Fatalf("text literal should escape closing parenthesis: %q", got)
+	}
+	if !bytes.Contains([]byte(got), []byte(`app.alert\\\(1\\\)`)) {
+		t.Fatalf("text literal should escape backslashes and parentheses: %q", got)
+	}
+	if !bytes.Contains([]byte(got), []byte(`\nnext`)) {
+		t.Fatalf("text literal should encode newlines: %q", got)
+	}
+}
+
 func TestWinAnsiEncodingKeepsLatinCharacters(t *testing.T) {
 	got := encodeWinAnsi("Déjà vu — 10€")
 	if !bytes.Contains(got, []byte{0xe9}) {

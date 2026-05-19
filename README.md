@@ -203,6 +203,7 @@ toolchain. Use Go 1.24.1 or a newer stable Go release.
 Architecture notes are available in [docs/architecture.md](docs/architecture.md).
 Reverse conversion notes are available in [docs/pdf-to-markdown.md](docs/pdf-to-markdown.md).
 Planned improvements are tracked in [docs/roadmap.md](docs/roadmap.md).
+Security notes are available in [SECURITY.md](SECURITY.md).
 
 Release binaries are built by GitHub Actions when a version tag is pushed:
 
