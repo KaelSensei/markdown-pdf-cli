@@ -2,13 +2,16 @@
 
 [![CI](https://github.com/KaelSensei/markdown-pdf-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/KaelSensei/markdown-pdf-cli/actions/workflows/ci.yml)
 
-`mdpdf` is a small offline Markdown/PDF converter for the terminal.
+`mdpdf` is a small offline document/PDF converter for the terminal.
 
-The project goal is intentionally narrow: generate readable PDF documents from common Markdown and extract best-effort Markdown from text-based PDFs without a browser, a web service, LaTeX, Pandoc, or any LLM call.
+The project goal is intentionally narrow: generate readable PDF documents from
+common local inputs and extract best-effort Markdown from text-based PDFs
+without a browser, a web service, LaTeX, Pandoc, LibreOffice, or any LLM call.
 
 ## Features
 
-- Converts local Markdown files to local PDF files.
+- Converts local Markdown, plain text, DOCX, PNG, and JPEG files to local PDF
+  files.
 - Converts text-based PDF files to best-effort Markdown.
 - Runs fully offline at conversion time.
 - Supports headings, paragraphs, unordered and ordered lists, fenced code blocks, blockquotes, horizontal rules, links, images as alt text, and simple pipe tables.
@@ -45,6 +48,15 @@ mdpdf input.md
 ```
 
 This writes `input.pdf` next to the source file.
+
+Convert other local input formats to PDF:
+
+```bash
+mdpdf notes.txt
+mdpdf report.docx
+mdpdf diagram.png
+mdpdf photo.jpg
+```
 
 Set an explicit output path:
 
@@ -92,10 +104,10 @@ mdpdf reverse input.pdf -preserve-pages
 
 ## Command Reference
 
-Markdown to PDF:
+Input to PDF:
 
 ```text
-Usage: mdpdf [options] input.md
+Usage: mdpdf [options] input.md|input.txt|input.docx|input.png|input.jpg|input.jpeg
 
 Options:
   -o string
@@ -147,6 +159,18 @@ V1 focuses on predictable text documents:
 
 HTML blocks, embedded remote images, custom fonts, syntax highlighting, task lists, footnotes, and full CommonMark edge cases are not part of V1.
 
+## Other Input Formats
+
+Plain text files are rendered as wrapped paragraphs.
+
+DOCX support extracts text from `word/document.xml`, maps common heading styles
+to Markdown headings, and maps numbered/list paragraphs to simple list items.
+It does not attempt full Word layout fidelity, embedded media, comments,
+tracked changes, headers, footers, or page styling.
+
+PNG, JPG, and JPEG files are embedded into a one-page PDF and scaled to fit the
+selected page size and margin.
+
 ## PDF To Markdown Support
 
 PDF-to-Markdown is a best-effort extraction mode. PDFs usually contain
@@ -188,9 +212,9 @@ mdpdf notes.md -theme elegant -color-scheme light
 
 ## Offline Design
 
-The converter does not call the network and does not use external services. It writes the PDF directly from Go code using standard PDF objects and built-in PDF fonts.
+The converter does not call the network and does not use external services. It writes the PDF directly from Go code using standard PDF objects, built-in PDF fonts, and embedded image objects.
 
-That means the output is deliberately simple and portable. It also means there is no dependency on Chromium, wkhtmltopdf, LaTeX, Typst, Pandoc, or a remote API.
+That means the output is deliberately simple and portable. It also means there is no dependency on Chromium, wkhtmltopdf, LaTeX, Typst, Pandoc, LibreOffice, or a remote API.
 
 Reverse mode uses a Go PDF extraction library at build time, but it still runs
 locally and does not call the network at conversion time.

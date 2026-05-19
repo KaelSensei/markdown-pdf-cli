@@ -2,6 +2,8 @@ package render
 
 import (
 	"bytes"
+	"image"
+	"image/color"
 	"testing"
 )
 
@@ -39,5 +41,38 @@ func TestRejectsUnknownTheme(t *testing.T) {
 	_, err := MarkdownToPDF("# Test", Options{Theme: "unknown"})
 	if err == nil {
 		t.Fatal("expected an error for unknown theme")
+	}
+}
+
+func TestPlainTextToPDF(t *testing.T) {
+	out, err := PlainTextToPDF("First paragraph.\n\nSecond paragraph.", Options{Title: "Text"})
+	if err != nil {
+		t.Fatalf("PlainTextToPDF returned error: %v", err)
+	}
+	if !bytes.HasPrefix(out, []byte("%PDF-1.4")) {
+		t.Fatal("plain text conversion did not generate a PDF")
+	}
+	if !bytes.Contains(out, []byte("First paragraph")) {
+		t.Fatal("plain text content missing from PDF stream")
+	}
+}
+
+func TestImageToPDF(t *testing.T) {
+	img := image.NewRGBA(image.Rect(0, 0, 4, 2))
+	for y := 0; y < 2; y++ {
+		for x := 0; x < 4; x++ {
+			img.Set(x, y, color.RGBA{R: 40, G: 100, B: 180, A: 255})
+		}
+	}
+
+	out, err := ImageToPDF(img, Options{Title: "Image"})
+	if err != nil {
+		t.Fatalf("ImageToPDF returned error: %v", err)
+	}
+	if !bytes.HasPrefix(out, []byte("%PDF-1.4")) {
+		t.Fatal("image conversion did not generate a PDF")
+	}
+	if !bytes.Contains(out, []byte("/Subtype /Image")) {
+		t.Fatal("image resource missing from PDF")
 	}
 }

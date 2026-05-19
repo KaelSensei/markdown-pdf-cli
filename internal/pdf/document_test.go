@@ -2,6 +2,8 @@ package pdf
 
 import (
 	"bytes"
+	"image"
+	"image/color"
 	"testing"
 )
 
@@ -36,6 +38,28 @@ func TestTextLiteralEscapesPDFSyntax(t *testing.T) {
 	}
 	if !bytes.Contains([]byte(got), []byte(`\nnext`)) {
 		t.Fatalf("text literal should encode newlines: %q", got)
+	}
+}
+
+func TestDocumentBytesEmbedsImageResource(t *testing.T) {
+	doc := New(Size{Width: 200, Height: 200}, "Image")
+	img := image.NewRGBA(image.Rect(0, 0, 2, 1))
+	img.Set(0, 0, color.RGBA{R: 255, A: 255})
+	img.Set(1, 0, color.RGBA{B: 255, A: 255})
+
+	ref := doc.AddImage(img)
+	page := doc.AddPage()
+	page.DrawImage(ref, 20, 30, 100, 50)
+
+	out := doc.Bytes()
+	if !bytes.Contains(out, []byte("/Subtype /Image")) {
+		t.Fatalf("image XObject missing")
+	}
+	if !bytes.Contains(out, []byte("/XObject << /Im1")) {
+		t.Fatalf("image resource missing")
+	}
+	if !bytes.Contains(out, []byte("/Im1 Do")) {
+		t.Fatalf("image draw command missing")
 	}
 }
 

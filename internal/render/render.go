@@ -2,6 +2,7 @@ package render
 
 import (
 	"fmt"
+	"image"
 	"math"
 	"strings"
 	"unicode"
@@ -68,6 +69,59 @@ type renderer struct {
 // The function is pure from the caller's perspective: it does not read files,
 // write files, or call the network. All IO is handled by the CLI layer.
 func MarkdownToPDF(source string, opts Options) ([]byte, error) {
+	r, err := newRenderer(opts, "Markdown PDF")
+	if err != nil {
+		return nil, err
+	}
+
+	parsed := markdown.Parse(source)
+	for _, block := range parsed.Blocks {
+		r.renderBlock(block)
+	}
+
+	return r.doc.Bytes(), nil
+}
+
+// PlainTextToPDF converts plain text into a complete PDF file.
+func PlainTextToPDF(source string, opts Options) ([]byte, error) {
+	r, err := newRenderer(opts, "Text PDF")
+	if err != nil {
+		return nil, err
+	}
+
+	for _, paragraph := range plainTextParagraphs(source) {
+		r.renderParagraph(paragraph)
+	}
+
+	return r.doc.Bytes(), nil
+}
+
+// ImageToPDF converts a raster image into a one-page PDF file.
+func ImageToPDF(img image.Image, opts Options) ([]byte, error) {
+	r, err := newRenderer(opts, "Image PDF")
+	if err != nil {
+		return nil, err
+	}
+
+	bounds := img.Bounds()
+	if bounds.Dx() <= 0 || bounds.Dy() <= 0 {
+		return nil, fmt.Errorf("image has empty dimensions")
+	}
+
+	ref := r.doc.AddImage(img)
+	imgWidth := float64(bounds.Dx())
+	imgHeight := float64(bounds.Dy())
+	scale := math.Min(r.contentWidth/imgWidth, (r.size.Height-r.margin*2)/imgHeight)
+	drawWidth := imgWidth * scale
+	drawHeight := imgHeight * scale
+	x := r.margin + math.Max(0, (r.contentWidth-drawWidth)/2)
+	y := r.margin + math.Max(0, (r.size.Height-r.margin*2-drawHeight)/2)
+	r.page.DrawImage(ref, x, y, drawWidth, drawHeight)
+
+	return r.doc.Bytes(), nil
+}
+
+func newRenderer(opts Options, defaultTitle string) (*renderer, error) {
 	size, err := resolvePageSize(opts.PageSize)
 	if err != nil {
 		return nil, err
@@ -87,7 +141,7 @@ func MarkdownToPDF(source string, opts Options) ([]byte, error) {
 		return nil, err
 	}
 	if strings.TrimSpace(opts.Title) == "" {
-		opts.Title = "Markdown PDF"
+		opts.Title = defaultTitle
 	}
 
 	doc := pdf.New(size, opts.Title)
@@ -99,13 +153,7 @@ func MarkdownToPDF(source string, opts Options) ([]byte, error) {
 		theme:        t,
 	}
 	r.newPage()
-
-	parsed := markdown.Parse(source)
-	for _, block := range parsed.Blocks {
-		r.renderBlock(block)
-	}
-
-	return doc.Bytes(), nil
+	return &r, nil
 }
 
 func resolvePageSize(name string) (pdf.Size, error) {
@@ -584,6 +632,29 @@ func wrapText(text string, maxWidth float64, font string, size float64) []string
 		lines = append(lines, current)
 	}
 	return lines
+}
+
+func plainTextParagraphs(source string) []string {
+	source = strings.ReplaceAll(source, "\r\n", "\n")
+	source = strings.ReplaceAll(source, "\r", "\n")
+
+	var paragraphs []string
+	var current []string
+	for _, line := range strings.Split(source, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			if len(current) > 0 {
+				paragraphs = append(paragraphs, strings.Join(current, " "))
+				current = nil
+			}
+			continue
+		}
+		current = append(current, line)
+	}
+	if len(current) > 0 {
+		paragraphs = append(paragraphs, strings.Join(current, " "))
+	}
+	return paragraphs
 }
 
 func wrapCodeLine(text string, maxWidth float64, font string, size float64) []string {
