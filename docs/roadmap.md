@@ -51,6 +51,13 @@ allows it.
 - Consider `golangci-lint` once the project has enough rules to justify it.
 - Keep examples small but representative.
 
+## Security Hardening
+
+- Keep Dependabot version update PRs merged when CI is green.
+- Monitor Dependabot alerts and private vulnerability reports.
+- Keep CodeQL and `govulncheck` passing before releases.
+- Consider a branch protection ruleset once contribution volume increases.
+
 ## Future Product Directions
 
 - Batch conversion for whole directories.

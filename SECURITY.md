@@ -45,4 +45,15 @@ Dependabot monitors:
 - Go modules
 - GitHub Actions
 
-The repository also runs Go tests, `go vet`, and a CLI build in CI.
+GitHub Dependabot alerts and automated security fixes are enabled for this
+repository.
+
+## Security Automation
+
+The repository runs:
+
+- Go tests, `go vet`, and a CLI build in CI.
+- CodeQL analysis for Go.
+- `govulncheck` against all Go packages.
+
+Private vulnerability reporting is enabled on GitHub.
